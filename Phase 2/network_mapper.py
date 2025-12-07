@@ -72,6 +72,35 @@ def ip_iterator(start,end):
     for ip in range(start,end+1):
         yield int_to_ip(ip)
 
+def parse_ports(input_str):
+    ports = set()
+    parts = input_str.split(',')
+    
+    for part in parts:
+        part = part.strip()
+        if not part: continue
+        
+        if '-' in part:
+            try:
+                start, end = part.split('-')
+                start, end = int(start), int(end)
+                if start > end: start, end = end, start
+                for p in range(start, end + 1):
+                    if 0 < p <= 65535:
+                        ports.add(p)
+            except ValueError:
+                print(f"Warning: Invalid range format '{part}' ignored.")
+        
+        else:
+            try:
+                p = int(part)
+                if 0 < p <= 65535:
+                    ports.add(p)
+            except ValueError:
+                print(f"Warning: Invalid port '{part}' ignored.")
+    
+    return sorted(list(ports))
+
 def check_port(ip, port):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.settimeout(TIMEOUT)
@@ -95,7 +124,7 @@ def check_port(ip, port):
     finally:
         sock.close()
 
-def scan_network(start_int, end_int):
+def scan_network(start_int, end_int, ports):
     print(f"\nStarting Scan with {THREAD_COUNT} threads...")
     print(f"Checking {len(COMMON_PORTS)} ports per IP...")
     print()
@@ -103,7 +132,7 @@ def scan_network(start_int, end_int):
         future_to_ip = {}
         
         for ip_str in ip_iterator(start_int, end_int):
-            for port in COMMON_PORTS:
+            for port in ports:
                 future = executor.submit(check_port, ip_str, port)
                 future_to_ip[future] = f"{ip_str}:{port}"
         
@@ -121,7 +150,18 @@ try:
     total = end - start + 1
     print(f"CIDR validated. Subnet range: {int_to_ip(start)} to {int_to_ip(end)}")
     print(f"Number of IPs: {total}")
-    scan_network(start,end)
+    
+    print("\nEnter Ports to scan.(optional)")
+    print("Examples: '80' OR '22, 443' OR '8000-8010'")
+    port_input = input("Ports: ")
+    user_ports = parse_ports(port_input)
+    
+    if not user_ports:
+        print("\nNo user ports selected. Using standard ports.")
+        scan_network(start,end,COMMON_PORTS)
+    else:
+        print(f"\nTarget ports: {user_ports}")
+        scan_network(start,end,user_ports)
 except ValueError as e:
     print(f"Error: {e}")
 except ValueError as e:
